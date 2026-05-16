@@ -69,23 +69,34 @@ class TestNormalizeObjects:
     def test_empty_objects(self) -> None:
         assert _normalize_objects({"objects": []}, 640, 480) == []
 
-    def test_bbox_2d_field(self) -> None:
-        payload = {"objects": [{"label": "cat", "bbox_2d": [10, 20, 100, 200]}]}
-        result = _normalize_objects(payload, 640, 480)
-        assert result[0]["bbox_2d"] == [10, 20, 100, 200]
-        assert result[0]["label"] == "cat"
+    def test_bbox_2d_qwen_normalized_1000_space(self) -> None:
+        """0-1000 coords on a 1920×1080 image should be scaled to pixels."""
+        payload = {"objects": [{"label": "car", "bbox_2d": [100, 500, 400, 900]}]}
+        result = _normalize_objects(payload, 1920, 1080)
+        assert result[0]["label"] == "car"
+        # 100/1000*1920=192, 500/1000*1080=540, 400/1000*1920=768, 900/1000*1080=972
+        assert result[0]["bbox_2d"] == [192, 540, 768, 972]
 
-    def test_bbox_field_alias(self) -> None:
-        payload = {"objects": [{"label": "dog", "bbox": [0, 0, 50, 50]}]}
-        result = _normalize_objects(payload, 640, 480)
-        assert result[0]["bbox_2d"] == [0, 0, 50, 50]
+    def test_bbox_field_alias_qwen_normalized(self) -> None:
+        """bbox alias field also supports 0-1000 coords."""
+        payload = {"objects": [{"label": "dog", "bbox": [0, 0, 500, 500]}]}
+        result = _normalize_objects(payload, 1000, 1000)
+        assert result[0]["bbox_2d"] == [0, 0, 500, 500]
 
     def test_x1y1x2y2_format(self) -> None:
-        payload = {"objects": [{"label": "car", "x1": 10, "y1": 20, "x2": 100, "y2": 80}]}
-        result = _normalize_objects(payload, 640, 480)
-        assert result[0]["bbox_2d"] == [10, 20, 100, 80]
+        """x1/y1/x2/y2 fields with 0-1000 coords on square image."""
+        payload = {"objects": [{"label": "car", "x1": 100, "y1": 200, "x2": 400, "y2": 800}]}
+        result = _normalize_objects(payload, 1000, 1000)
+        assert result[0]["bbox_2d"] == [100, 200, 400, 800]
 
-    def test_normalized_coordinates_scaled(self) -> None:
+    def test_pixel_coords_above_1000_unchanged(self) -> None:
+        """Pixel coordinates > 1000 must not be rescaled."""
+        payload = {"objects": [{"label": "car", "bbox_2d": [1100, 200, 1500, 600]}]}
+        result = _normalize_objects(payload, 1920, 1080)
+        assert result[0]["bbox_2d"] == [1100, 200, 1500, 600]
+
+    def test_zero_to_one_normalized_coordinates_scaled(self) -> None:
+        """Legacy 0-1 normalised floats should scale by image dimensions."""
         payload = {"objects": [{"label": "cat", "bbox_2d": [0.1, 0.2, 0.5, 0.8]}]}
         result = _normalize_objects(payload, 100, 100)
         assert result[0]["bbox_2d"] == [10, 20, 50, 80]

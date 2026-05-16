@@ -13,8 +13,8 @@ from app.utils.config import Settings, get_settings
 DEFAULT_DETECTION_TASK = "检测图中所有目标"
 
 DETECTION_PROMPT_TEMPLATE = (
-    "请检测图中的目标，以JSON格式返回每个目标的边界框2D坐标（bbox_2d）和类别标签（label）。\n"
-    "原图宽度为 {image_width} 像素，高度为 {image_height} 像素。\n"
+    "请检测图中的目标，以JSON格式返回每个目标的边界框坐标和类别标签。\n"
+    "坐标使用归一化格式，范围 0-1000（0 表示左/上边缘，1000 表示右/下边缘），格式为 [x1, y1, x2, y2]（左上角到右下角）。\n"
     '只输出 JSON，格式为 {{"objects": [{{"label": "类别名", "bbox_2d": [x1, y1, x2, y2]}}]}}，不要解释或 markdown。\n\n'
     "用户任务：{user_task}"
 )
@@ -82,8 +82,6 @@ class QwenVLClient:
                                 "type": "text",
                                 "text": DETECTION_PROMPT_TEMPLATE.format(
                                     user_task=user_task,
-                                    image_width=image_width,
-                                    image_height=image_height,
                                 ),
                             },
                         ],
@@ -191,13 +189,24 @@ def _extract_bbox(item: dict[str, Any], image_width: int, image_height: int) -> 
             raise QwenClientError(f"Unsupported bbox format: {item}")
 
     numeric = [float(value) for value in coords]
-    if max(abs(value) for value in numeric) <= 1.5:
+    max_val = max(abs(v) for v in numeric)
+    if max_val <= 1.5:
+        # 0-1 normalised
         numeric = [
             numeric[0] * image_width,
             numeric[1] * image_height,
             numeric[2] * image_width,
             numeric[3] * image_height,
         ]
+    elif max_val <= 1000:
+        # 0-1000 normalised (Qwen-VL native format)
+        numeric = [
+            numeric[0] / 1000 * image_width,
+            numeric[1] / 1000 * image_height,
+            numeric[2] / 1000 * image_width,
+            numeric[3] / 1000 * image_height,
+        ]
+    # else: already pixel coordinates, use as-is
 
     xmin, ymin, xmax, ymax = numeric
     xmin, xmax = sorted((xmin, xmax))
