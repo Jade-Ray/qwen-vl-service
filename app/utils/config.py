@@ -16,7 +16,16 @@ class Settings:
     api_key: str | None
     base_url: str
     model: str
-    max_tokens: int = 1024
+    max_tokens: int
+    # Qwen API request timeout in seconds (0 = library default)
+    qwen_timeout: float
+    # Max retry attempts on transient errors (0 = no retry)
+    qwen_max_retries: int
+    # Input limits (0 = unlimited)
+    max_image_b64_chars: int
+    max_image_pixels: int
+    # Service-level API key for inbound auth (None = auth disabled)
+    service_api_key: str | None
 
 
 @lru_cache(maxsize=1)
@@ -24,6 +33,13 @@ def get_settings() -> Settings:
     return Settings(
         api_key=os.getenv("QWEN_API_KEY"),
         base_url=os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
-        model=os.getenv("QWEN_MODEL", "qwen3.5-omni-flash"),
+        model=os.getenv("QWEN_MODEL", "qwen-vl-max"),
         max_tokens=int(os.getenv("QWEN_MAX_TOKENS", "1024")),
+        qwen_timeout=float(os.getenv("QWEN_TIMEOUT", "120.0")),
+        qwen_max_retries=int(os.getenv("QWEN_MAX_RETRIES", "2")),
+        # ~15 MB image ≈ 20 MB base64
+        max_image_b64_chars=int(os.getenv("MAX_IMAGE_B64_CHARS", str(20 * 1024 * 1024))),
+        # 4096×4096 default
+        max_image_pixels=int(os.getenv("MAX_IMAGE_PIXELS", str(4096 * 4096))),
+        service_api_key=os.getenv("SERVICE_API_KEY") or None,
     )

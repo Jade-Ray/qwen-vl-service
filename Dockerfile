@@ -7,7 +7,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 
+# Run as non-root for least privilege
+RUN useradd -m appuser
+USER appuser
+
 EXPOSE 8000
 
-# 单 worker：保证并发锁在进程内有效
+# Single worker: keeps the in-process concurrency lock effective
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

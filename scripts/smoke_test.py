@@ -12,21 +12,27 @@ def load_image_base64(image_path: Path) -> str:
     return base64.b64encode(image_path.read_bytes()).decode("utf-8")
 
 
-def run_echo(endpoint: str, image_path: Path) -> None:
+def run_echo(endpoint: str, image_path: Path, service_key: str | None) -> None:
+    headers = {"X-API-Key": service_key} if service_key else {}
     payload = {"image_base64": load_image_base64(image_path)}
-    response = httpx.post(f"{endpoint.rstrip('/')}/debug/echo-image", json=payload, timeout=60)
+    response = httpx.post(f"{endpoint.rstrip('/')}/v1/debug/echo-image", json=payload, headers=headers, timeout=60)
     response.raise_for_status()
     data = response.json()
     print(json.dumps({"status": "ok", "image_width": data["image_width"], "image_height": data["image_height"]}, ensure_ascii=False, indent=2))
 
 
-def run_detect(endpoint: str, image_path: Path, prompt: str | None) -> None:
+def run_detect(endpoint: str, image_path: Path, prompt: str | None, service_key: str | None) -> None:
+    headers = {"X-API-Key": service_key} if service_key else {}
     payload: dict = {"image_base64": load_image_base64(image_path)}
     if prompt:
         payload["prompt"] = prompt
-    response = httpx.post(f"{endpoint.rstrip('/')}/detect", json=payload, timeout=180)
+    response = httpx.post(f"{endpoint.rstrip('/')}/v1/detect", json=payload, headers=headers, timeout=180)
     response.raise_for_status()
-    print(json.dumps(response.json()["result_json"], ensure_ascii=False, indent=2))
+    data = response.json()
+    if data["type"] == "detected":
+        print(json.dumps(data["objects"], ensure_ascii=False, indent=2))
+    else:
+        print(json.dumps({"type": "no_detection"}, ensure_ascii=False, indent=2))
 
 
 def run_qwen(image_path: Path, prompt: str, api_key: str, base_url: str, model: str) -> None:
@@ -69,20 +75,21 @@ def main() -> None:
     parser.add_argument("--api-key", default=os.getenv("QWEN_API_KEY"))
     parser.add_argument("--base-url", default="https://dashscope.aliyuncs.com/compatible-mode/v1")
     parser.add_argument("--model", default="qwen-vl-max")
+    parser.add_argument("--service-key", default=os.getenv("SERVICE_API_KEY"))
     args = parser.parse_args()
 
     if args.mode == "echo":
         image_path = Path(args.image)
         if not image_path.exists():
             raise FileNotFoundError(f"Image not found: {image_path}")
-        run_echo(args.endpoint, image_path)
+        run_echo(args.endpoint, image_path, args.service_key)
         return
 
     if args.mode == "detect":
         image_path = Path(args.image)
         if not image_path.exists():
             raise FileNotFoundError(f"Image not found: {image_path}")
-        run_detect(args.endpoint, image_path, args.prompt)
+        run_detect(args.endpoint, image_path, args.prompt, args.service_key)
         return
 
     if not args.api_key:

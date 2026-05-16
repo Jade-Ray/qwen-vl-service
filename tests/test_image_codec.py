@@ -42,6 +42,22 @@ class TestDecodeBase64Image:
         with pytest.raises(ValueError):
             decode_base64_image("   ")
 
+    def test_decode_b64_too_large_raises(self) -> None:
+        b64 = make_png_base64(50, 50)
+        with pytest.raises(ValueError, match="too large"):
+            decode_base64_image(b64, max_b64_chars=10)
+
+    def test_decode_pixels_too_large_raises(self) -> None:
+        # 100×80 = 8000 px; limit to 100 px
+        b64 = make_png_base64(100, 80)
+        with pytest.raises(ValueError, match="pixel"):
+            decode_base64_image(b64, max_image_pixels=100)
+
+    def test_decode_pixels_within_limit_passes(self) -> None:
+        b64 = make_png_base64(10, 10)  # 100 px
+        image, _, _ = decode_base64_image(b64, max_image_pixels=100)
+        assert image.size == (10, 10)
+
 
 class TestEncodeImageToBase64:
     def test_encode_png_roundtrip(self) -> None:

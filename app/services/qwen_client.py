@@ -1,7 +1,9 @@
 import json
 import re
+import time
 from typing import Any
 
+import openai
 from openai import OpenAI
 
 from app.schemas import DetectionObject, DetectionResult
@@ -20,6 +22,27 @@ DETECTION_PROMPT_TEMPLATE = (
 
 class QwenClientError(Exception):
     pass
+
+
+def _call_with_retry(fn, max_retries: int, base_delay: float = 1.0):
+    """Call *fn* with exponential-backoff retry on transient Qwen API errors."""
+    last_exc: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except (openai.RateLimitError, openai.APIConnectionError) as exc:
+            last_exc = exc
+        except openai.APIStatusError as exc:
+            if exc.status_code is not None and exc.status_code < 500:
+                raise QwenClientError(
+                    f"Qwen API error {exc.status_code}: {exc.message}"
+                ) from exc
+            last_exc = exc
+        if attempt < max_retries:
+            time.sleep(base_delay * (2**attempt))
+    raise QwenClientError(
+        f"Qwen API failed after {max_retries + 1} attempt(s): {last_exc}"
+    ) from last_exc
 
 
 class QwenVLClient:
@@ -42,31 +65,35 @@ class QwenVLClient:
         image_mime: str = "image/jpeg",
     ) -> DetectionResult:
         user_task = prompt if prompt else DEFAULT_DETECTION_TASK
-        response = self.client.chat.completions.create(
-            model=self.settings.model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{image_mime};base64,{image_base64}",
+        response = _call_with_retry(
+            lambda: self.client.chat.completions.create(
+                model=self.settings.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{image_mime};base64,{image_base64}",
+                                },
                             },
-                        },
-                        {
-                            "type": "text",
-                            "text": DETECTION_PROMPT_TEMPLATE.format(
-                                user_task=user_task,
-                                image_width=image_width,
-                                image_height=image_height,
-                            ),
-                        },
-                    ],
-                }
-            ],
-            max_tokens=self.settings.max_tokens,
-            temperature=0,
+                            {
+                                "type": "text",
+                                "text": DETECTION_PROMPT_TEMPLATE.format(
+                                    user_task=user_task,
+                                    image_width=image_width,
+                                    image_height=image_height,
+                                ),
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=self.settings.max_tokens,
+                temperature=0,
+                timeout=self.settings.qwen_timeout or None,
+            ),
+            max_retries=self.settings.qwen_max_retries,
         )
 
         content = _coerce_message_content(response.choices[0].message.content)

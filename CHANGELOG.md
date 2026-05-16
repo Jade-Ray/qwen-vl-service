@@ -4,6 +4,32 @@
 
 ---
 
+## [0.3.0] - 2026-05-17
+
+### 新增
+
+- **API 鉴权**：`X-API-Key` 请求头鉴权；`SERVICE_API_KEY` 未配置时自动禁用（开发友好）；`/health` 始终公开。
+- **API 版本号**：所有业务路由迁移至 `/v1/` 前缀，便于后续平滑升级。
+- **Qwen API 超时**：`detect_objects` 调用加入可配置超时（`QWEN_TIMEOUT`，默认 120 s），防止请求永久挂起。
+- **指数退避重试**：对限流（429）、连接错误、服务端 5xx 错误自动重试，最多 `QWEN_MAX_RETRIES` 次（默认 2）。
+- **QwenVLClient 单例**：通过 FastAPI lifespan + `app.state` 管理单一实例，FastAPI `Depends` 注入，消除每次请求重建 HTTP 连接池的开销。
+- **结构化 JSON 日志**：HTTP 中间件记录 `request_id`、`method`、`path`、`status`、`elapsed_ms`，JSON 格式输出，方便日志收集。
+- **启动配置校验**：lifespan 启动时检查 `QWEN_API_KEY`，未配置时输出 warning 而非崩溃。
+- **图像大小限制**：Base64 长度超限返回 422（`MAX_IMAGE_B64_CHARS`）；图像分辨率超限返回 422（`MAX_IMAGE_PIXELS`）。
+- **Dockerfile 安全**：以非 root 用户（`appuser`）运行容器；仅安装运行时依赖。
+- **docker-compose 资源限制**：`cpus: 2.0`、`memory: 2G`，防止单服务耗尽宿主机资源。
+- **依赖分层**：`requirements.txt` 仅包含运行时依赖；新增 `requirements-dev.txt` 管理测试工具。
+- **测试覆盖扩充**：新增 `test_qwen_client.py`（JSON 解析边界测试）、鉴权测试、图像大小限制测试，共 75 个测试。
+
+### 变更
+
+- `/debug/echo-image` → `/v1/debug/echo-image`
+- `/detect` → `/v1/detect`
+- `smoke_test.py` 路由同步更新，新增 `--service-key` 参数。
+- 服务版本号更新为 `0.3.0`。
+
+---
+
 ## [0.2.0] - 2026-05-17
 
 ### 新增

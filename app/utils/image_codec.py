@@ -8,13 +8,23 @@ from PIL import Image
 DATA_URL_PATTERN = re.compile(r"^data:(?P<mime>image/[-+\w.]+);base64,(?P<data>.+)$", re.IGNORECASE | re.DOTALL)
 
 
-def decode_base64_image(image_base64: str) -> tuple[Image.Image, str, str]:
+def decode_base64_image(
+    image_base64: str,
+    max_b64_chars: int = 0,
+    max_image_pixels: int = 0,
+) -> tuple[Image.Image, str, str]:
     payload = image_base64.strip()
     mime_type = ""  # will be inferred from image.format when no data URL prefix
     match = DATA_URL_PATTERN.match(payload)
     if match:
         mime_type = match.group("mime").lower()
         payload = match.group("data")
+
+    if max_b64_chars and len(payload) > max_b64_chars:
+        raise ValueError(
+            f"Image payload too large: {len(payload):,} characters exceeds the "
+            f"{max_b64_chars:,}-character limit."
+        )
 
     try:
         image_bytes = base64.b64decode(payload, validate=True)
@@ -26,6 +36,12 @@ def decode_base64_image(image_base64: str) -> tuple[Image.Image, str, str]:
         image.load()
     except Exception as exc:  # noqa: BLE001
         raise ValueError("image_base64 could not be decoded into an image.") from exc
+
+    if max_image_pixels and image.width * image.height > max_image_pixels:
+        raise ValueError(
+            f"Image resolution {image.width}×{image.height} "
+            f"({image.width * image.height:,} px) exceeds the {max_image_pixels:,}-pixel limit."
+        )
 
     normalized_base64 = base64.b64encode(image_bytes).decode("utf-8")
     source_format = _mime_to_format(mime_type, fallback=image.format)
