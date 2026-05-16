@@ -27,7 +27,8 @@ ENV/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
+# 忽略探索性 notebook，保留正式测试 notebook（remote_service_test.ipynb）
+qwen_vl_server_test.ipynb
 
 # Test artifacts
 .pytest_cache/
