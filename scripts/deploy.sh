@@ -58,14 +58,22 @@ log() { echo "[$(date '+%H:%M:%S')] $*"; }
 # 优先使用系统中已有的 conda（任意位置），找不到才安装 Miniconda
 if command -v conda &>/dev/null; then
   CONDA="$(command -v conda)"
-  # 推断 conda 根目录（bin/conda → 上两级）
-  CONDA_DIR="$(dirname "$(dirname "${CONDA}")")"
-  log "Found existing conda at ${CONDA} (prefix: ${CONDA_DIR})"
-elif [[ -f "${CONDA_DIR}/bin/conda" ]]; then
-  CONDA="${CONDA_DIR}/bin/conda"
-  log "Found Miniconda at ${CONDA_DIR}"
+  # 用 conda 自身获取根目录，比 dirname 推断更可靠
+  CONDA_DIR="$("${CONDA}" info --base 2>/dev/null)"
+  log "Found existing conda: ${CONDA} (base: ${CONDA_DIR})"
 else
-  log "conda not found. Installing Miniconda3 to ${CONDA_DIR} ..."
+  log "conda not found."
+  echo ""
+  echo "未检测到 conda，需要安装 Miniconda3 到 ${CONDA_DIR}"
+  read -r -p "是否继续安装？[y/N] " _answer
+  case "${_answer}" in
+    [yY][eE][sS]|[yY]) ;;
+    *)
+      echo "已取消。请手动安装 conda 后重新运行此脚本。"
+      exit 1
+      ;;
+  esac
+  log "Installing Miniconda3 to ${CONDA_DIR} ..."
   curl -fsSL "${MINICONDA_URL}" -o "${MINICONDA_INSTALLER}"
   bash "${MINICONDA_INSTALLER}" -b -p "${CONDA_DIR}"
   rm -f "${MINICONDA_INSTALLER}"
