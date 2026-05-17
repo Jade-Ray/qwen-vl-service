@@ -109,6 +109,7 @@ class TestEchoImageEndpoint:
             max_image_b64_chars=10,   # way too small
             max_image_pixels=0,
             service_api_key=None,
+            service_port=8000,
         )
         response = api_client.post("/v1/debug/echo-image", json={"image_base64": b64})
         assert response.status_code == 422
@@ -126,6 +127,7 @@ class TestEchoImageEndpoint:
             max_image_b64_chars=0,
             max_image_pixels=100,  # 200×200=40000 > 100
             service_api_key=None,
+            service_port=8000,
         )
         response = api_client.post("/v1/debug/echo-image", json={"image_base64": b64})
         assert response.status_code == 422
@@ -221,6 +223,7 @@ class TestAuthentication:
             max_image_b64_chars=0,
             max_image_pixels=0,
             service_api_key="secret-key",
+            service_port=8000,
         )
 
     def test_auth_disabled_no_header_passes(self, api_client: TestClient) -> None:

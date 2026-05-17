@@ -123,7 +123,11 @@ else
 fi
 
 # ---------- 7. 写入 systemd 服务文件 ----------
-log "Writing systemd unit to ${SERVICE_FILE} ..."
+# Read SERVICE_PORT from .env (default 8000)
+SERVICE_PORT=$(grep -m1 '^SERVICE_PORT=' "${ENV_FILE}" | cut -d'=' -f2 | tr -d '[:space:]')
+SERVICE_PORT="${SERVICE_PORT:-8000}"
+
+log "Writing systemd unit to ${SERVICE_FILE} (port ${SERVICE_PORT}) ..."
 cat > "${SERVICE_FILE}" <<EOF
 [Unit]
 Description=Qwen VL Detection Service
@@ -133,7 +137,7 @@ After=network.target
 Type=simple
 WorkingDirectory=${SERVICE_DIR}
 EnvironmentFile=${ENV_FILE}
-ExecStart=${PYTHON} -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+ExecStart=${PYTHON} -m uvicorn app.main:app --host 0.0.0.0 --port ${SERVICE_PORT}
 Restart=on-failure
 RestartSec=5
 
@@ -150,9 +154,9 @@ systemctl restart "${SERVICE_NAME}"
 sleep 3
 if systemctl is-active --quiet "${SERVICE_NAME}"; then
   log "Service is running."
-  curl -s http://localhost:8000/health
+  curl -s http://localhost:${SERVICE_PORT}/health
   echo ""
-  log "=== Deployment complete: ${DEPLOY_TAG:-main} ✓ ==="
+  log "=== Deployment complete: ${DEPLOY_TAG:-main} (port ${SERVICE_PORT}) ✓ ==="
 else
   log "ERROR: Service failed to start. Check logs:"
   log "  journalctl -u ${SERVICE_NAME} -n 50 --no-pager"

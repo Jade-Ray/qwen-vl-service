@@ -54,7 +54,8 @@ pytest tests/ -v
 | `QWEN_TIMEOUT` | | 单次 API 调用超时秒数，0 = 不限 | `120` |
 | `QWEN_MAX_RETRIES` | | 失败自动重试次数（指数退避） | `2` |
 | `SERVICE_API_KEY` | | 服务鉴权密钥，空值表示禁用鉴权 | — |
-| `MAX_IMAGE_B64_CHARS` | | 图像 Base64 最大长度（字节） | `10485760` |
+| `SERVICE_PORT` | | HTTP 监听端口 | `8000` |
+| `MAX_IMAGE_B64_CHARS` | | 图像 Base64 最大长度（字节） | `20971520` |
 | `MAX_IMAGE_PIXELS` | | 图像最大分辨率（像素总数） | `4000000` |
 
 ---
@@ -194,7 +195,7 @@ git push origin v0.5.0
 systemctl status qwen-vl           # 查看服务状态
 journalctl -u qwen-vl -f           # 实时日志
 systemctl restart qwen-vl          # 重启服务
-curl http://localhost:8000/health  # 健康检查
+curl http://localhost:$(grep SERVICE_PORT /opt/qwen-vl-service/.env | cut -d= -f2)/health  # 健康检查
 ```
 
 ### 可选：Nginx 反向代理

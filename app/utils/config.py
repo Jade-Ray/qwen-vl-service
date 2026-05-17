@@ -26,6 +26,8 @@ class Settings:
     max_image_pixels: int
     # Service-level API key for inbound auth (None = auth disabled)
     service_api_key: str | None
+    # Port the uvicorn server listens on
+    service_port: int
 
 
 @lru_cache(maxsize=1)
@@ -42,4 +44,5 @@ def get_settings() -> Settings:
         # 4096×4096 default
         max_image_pixels=int(os.getenv("MAX_IMAGE_PIXELS", str(4096 * 4096))),
         service_api_key=os.getenv("SERVICE_API_KEY") or None,
+        service_port=int(os.getenv("SERVICE_PORT", "8000")),
     )
