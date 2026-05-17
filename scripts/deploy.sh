@@ -55,12 +55,45 @@ done
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 # ---------- 1. 检测 / 安装 conda ----------
-# 优先使用系统中已有的 conda（任意位置），找不到才安装 Miniconda
-if command -v conda &>/dev/null; then
-  CONDA="$(command -v conda)"
-  # 用 conda 自身获取根目录，比 dirname 推断更可靠
+# sudo bash 不继承用户 PATH，需同时搜索常见安装路径
+_find_conda() {
+  # 1. 当前 PATH 中查找
+  if command -v conda &>/dev/null; then
+    command -v conda; return
+  fi
+  # 2. 搜索常见安装路径（覆盖 ~/miniconda3、~/anaconda3、/opt/* 等）
+  local _candidates=(
+    "${HOME}/miniconda3/bin/conda"
+    "${HOME}/miniconda/bin/conda"
+    "${HOME}/anaconda3/bin/conda"
+    "${HOME}/anaconda/bin/conda"
+    "${HOME}/mambaforge/bin/conda"
+    "${HOME}/miniforge3/bin/conda"
+    "/opt/miniconda3/bin/conda"
+    "/opt/anaconda3/bin/conda"
+    "/opt/mambaforge/bin/conda"
+    "/usr/local/miniconda3/bin/conda"
+    "/usr/local/anaconda3/bin/conda"
+  )
+  # 3. 搜索所有用户 home 目录下的 conda
+  for _home in /home/*/; do
+    _candidates+=(
+      "${_home}miniconda3/bin/conda"
+      "${_home}anaconda3/bin/conda"
+      "${_home}mambaforge/bin/conda"
+      "${_home}miniforge3/bin/conda"
+    )
+  done
+  for _c in "${_candidates[@]}"; do
+    [[ -x "${_c}" ]] && echo "${_c}" && return
+  done
+  return 1
+}
+
+if _CONDA_BIN="$(_find_conda)"; then
+  CONDA="${_CONDA_BIN}"
   CONDA_DIR="$("${CONDA}" info --base 2>/dev/null)"
-  log "Found existing conda: ${CONDA} (base: ${CONDA_DIR})"
+  log "Found conda: ${CONDA} (base: ${CONDA_DIR})"
 else
   log "conda not found."
   echo ""
