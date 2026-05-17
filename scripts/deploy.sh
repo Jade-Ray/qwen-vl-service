@@ -2,18 +2,20 @@
 # =============================================================================
 # deploy.sh — Qwen-VL Detection Service 部署脚本（Ubuntu + Miniconda + systemd）
 #
-# 用法（在目标服务器上执行）：
-#   # 首次部署
-#   bash deploy.sh --tag v0.4.0 --repo https://github.com/Jade-Ray/qwen-vl-service
+# 用法（在目标服务器上执行，需要 root 权限）：
 #
-#   # 更新到新版本
-#   bash deploy.sh --tag v0.5.0
+#   # 推荐：下载后执行（兼容 root 和 sudo）
+#   curl -fsSL https://gitee.com/ambitionqi/qwen-vl-service/raw/main/scripts/deploy.sh \
+#     -o /tmp/deploy.sh && bash /tmp/deploy.sh --tag v0.4.0
 #
-#   # 不指定 tag，拉取 main 最新提交（开发/测试用）
-#   bash deploy.sh
+#   # 非 root 用户加 sudo（注意：sudo 不支持进程替换 <()，必须先下载）
+#   curl -fsSL ... -o /tmp/deploy.sh && sudo bash /tmp/deploy.sh --tag v0.4.0
 #
-# 也可从本地通过 SSH 一键触发：
-#   ssh root@<SERVER_IP> "bash -s -- --tag v0.4.0" < scripts/deploy.sh
+#   # 已在服务器上克隆仓库后，直接执行：
+#   bash /opt/qwen-vl-service/scripts/deploy.sh --tag v0.5.0
+#
+#   # 从本地通过 SSH 触发（服务器已有 deploy.sh）：
+#   ssh root@<SERVER_IP> "bash /opt/qwen-vl-service/scripts/deploy.sh --tag v0.5.0"
 #
 # 敏感信息：
 #   .env 文件不在仓库中，首次部署时脚本会从 .env.example 复制一份，

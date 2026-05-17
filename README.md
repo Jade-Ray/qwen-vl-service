@@ -138,14 +138,18 @@ pytest tests/ -v
 ### 首次部署
 
 ```bash
-# 在服务器上执行（需要 root 或 sudo 权限）
+# 在服务器上执行（需要 root 权限，推荐直接使用 root 用户）
 # 国内服务器推荐使用 Gitee 镜像（GitHub 自动同步）：
-bash <(curl -fsSL https://gitee.com/ambitionqi/qwen-vl-service/raw/main/scripts/deploy.sh) \
-  --tag v0.4.0
+curl -fsSL https://gitee.com/ambitionqi/qwen-vl-service/raw/main/scripts/deploy.sh \
+  -o /tmp/deploy.sh && bash /tmp/deploy.sh --tag v0.4.0
 
 # 境外服务器或可直连 GitHub 时使用：
-# bash <(curl -fsSL https://raw.githubusercontent.com/Jade-Ray/qwen-vl-service/main/scripts/deploy.sh) \
-#   --tag v0.4.0
+# curl -fsSL https://raw.githubusercontent.com/Jade-Ray/qwen-vl-service/main/scripts/deploy.sh \
+#   -o /tmp/deploy.sh && bash /tmp/deploy.sh --tag v0.4.0
+
+# 非 root 用户需要加 sudo（注意：sudo 不支持进程替换，必须先下载再执行）：
+# curl -fsSL https://gitee.com/ambitionqi/qwen-vl-service/raw/main/scripts/deploy.sh \
+#   -o /tmp/deploy.sh && sudo bash /tmp/deploy.sh --tag v0.4.0
 ```
 
 脚本首次运行时，若 `/opt/qwen-vl-service/.env` 不存在，会自动从 `.env.example` 创建模板并提示填写：
