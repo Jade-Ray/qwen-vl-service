@@ -22,6 +22,13 @@
 # =============================================================================
 set -euo pipefail
 
+# ---------- root 权限检查 ----------
+if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  echo "ERROR: 此脚本需要 root 权限。请切换到 root 用户或使用 sudo 执行："
+  echo "  sudo bash deploy.sh $*"
+  exit 1
+fi
+
 # ---------- 配置 ----------
 SERVICE_DIR="/opt/qwen-vl-service"
 CONDA_DIR="/opt/miniconda3"
@@ -73,6 +80,8 @@ PYTHON="${CONDA_DIR}/envs/${CONDA_ENV}/bin/python"
 
 # ---------- 3. 拉取代码 ----------
 if [[ ! -d "${SERVICE_DIR}/.git" ]]; then
+  log "Creating service directory ${SERVICE_DIR} ..."
+  mkdir -p "${SERVICE_DIR}"
   log "Cloning repository from ${REPO_URL} ..."
   git clone "${REPO_URL}" "${SERVICE_DIR}"
   cd "${SERVICE_DIR}"
@@ -184,6 +193,13 @@ fi
 #   - .env 文件已就绪（或通过 --env-file 参数传入）
 # =============================================================================
 set -euo pipefail
+
+# ---------- root 权限检查 ----------
+if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  echo "ERROR: 此脚本需要 root 权限。请切换到 root 用户或使用 sudo 执行："
+  echo "  sudo bash deploy.sh $*"
+  exit 1
+fi
 
 # ---------- 配置 ----------
 SERVICE_DIR="/opt/qwen-vl-service"
