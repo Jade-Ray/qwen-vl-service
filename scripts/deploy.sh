@@ -45,18 +45,24 @@ done
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
-# ---------- 1. 安装 Miniconda（如未安装）----------
-if [[ ! -f "${CONDA_DIR}/bin/conda" ]]; then
-  log "Installing Miniconda3 to ${CONDA_DIR} ..."
+# ---------- 1. 检测 / 安装 conda ----------
+# 优先使用系统中已有的 conda（任意位置），找不到才安装 Miniconda
+if command -v conda &>/dev/null; then
+  CONDA="$(command -v conda)"
+  # 推断 conda 根目录（bin/conda → 上两级）
+  CONDA_DIR="$(dirname "$(dirname "${CONDA}")")"
+  log "Found existing conda at ${CONDA} (prefix: ${CONDA_DIR})"
+elif [[ -f "${CONDA_DIR}/bin/conda" ]]; then
+  CONDA="${CONDA_DIR}/bin/conda"
+  log "Found Miniconda at ${CONDA_DIR}"
+else
+  log "conda not found. Installing Miniconda3 to ${CONDA_DIR} ..."
   curl -fsSL "${MINICONDA_URL}" -o "${MINICONDA_INSTALLER}"
   bash "${MINICONDA_INSTALLER}" -b -p "${CONDA_DIR}"
   rm -f "${MINICONDA_INSTALLER}"
+  CONDA="${CONDA_DIR}/bin/conda"
   log "Miniconda installed."
-else
-  log "Miniconda already present at ${CONDA_DIR}."
 fi
-
-CONDA="${CONDA_DIR}/bin/conda"
 PIP="${CONDA_DIR}/envs/${CONDA_ENV}/bin/pip"
 PYTHON="${CONDA_DIR}/envs/${CONDA_ENV}/bin/python"
 
