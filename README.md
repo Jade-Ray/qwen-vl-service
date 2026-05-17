@@ -139,7 +139,7 @@ pytest tests/ -v
 
 ```bash
 # 在服务器上执行（需要 root 或 sudo 权限）
-bash <(curl -fsSL https://raw.githubusercontent.com/Jade-Ray/qwen-vl-service/main/scripts/deploy.sh) \
+bash <(curl -fsSL https://gitee.com/ambitionqi/qwen-vl-service/raw/main/scripts/deploy.sh) \
   --tag v0.4.0
 
 # 或者 SSH 到服务器后手动操作：

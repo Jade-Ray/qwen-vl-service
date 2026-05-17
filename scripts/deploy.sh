@@ -31,7 +31,7 @@ SERVICE_NAME="qwen-vl"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 MINICONDA_INSTALLER="/tmp/miniconda_installer.sh"
 MINICONDA_URL="https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-latest-Linux-x86_64.sh"
-REPO_URL="https://github.com/Jade-Ray/qwen-vl-service"
+REPO_URL="https://gitee.com/ambitionqi/qwen-vl-service"
 DEPLOY_TAG=""
 
 # ---------- 参数解析 ----------
