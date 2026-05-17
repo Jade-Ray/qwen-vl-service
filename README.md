@@ -139,12 +139,13 @@ pytest tests/ -v
 
 ```bash
 # 在服务器上执行（需要 root 或 sudo 权限）
+# 国内服务器推荐使用 Gitee 镜像（GitHub 自动同步）：
 bash <(curl -fsSL https://gitee.com/ambitionqi/qwen-vl-service/raw/main/scripts/deploy.sh) \
   --tag v0.4.0
 
-# 或者 SSH 到服务器后手动操作：
-# ssh root@your-server-ip
-# bash <(curl -fsSL ...) --tag v0.4.0
+# 境外服务器或可直连 GitHub 时使用：
+# bash <(curl -fsSL https://raw.githubusercontent.com/Jade-Ray/qwen-vl-service/main/scripts/deploy.sh) \
+#   --tag v0.4.0
 ```
 
 脚本首次运行时，若 `/opt/qwen-vl-service/.env` 不存在，会自动从 `.env.example` 创建模板并提示填写：
