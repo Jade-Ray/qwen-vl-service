@@ -11,7 +11,7 @@
 - [快速开始](#快速开始)
 - [环境变量配置](#环境变量配置)
 - [API 接口说明](#api-接口说明)
-- [公网部署（Ubuntu）](#公网部署ubuntu)
+- [公网部署（Ubuntu）](#公网部署ubuntu--miniconda--systemd)
 
 ---
 
@@ -129,63 +129,72 @@ pytest tests/ -v
 
 ---
 
-## 公网部署（Ubuntu + Miniconda）
+## 公网部署（Ubuntu + Miniconda + systemd）
 
-适用于内存有限（< 2 GB）的轻量云服务器，无需 Docker。
+适用于内存有限（< 2 GB）的轻量云服务器，无需 Docker。  
+部署脚本 `scripts/deploy.sh` 会自动完成：Miniconda 安装 → conda 环境创建 → 依赖安装 → systemd 服务配置与启动。
+
+### 首次部署
 
 ```bash
-# 1. 安装 Miniconda
-curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o /tmp/miniconda.sh
-bash /tmp/miniconda.sh -b -p /opt/miniconda3
+# 在服务器上执行（需要 root 或 sudo 权限）
+bash <(curl -fsSL https://raw.githubusercontent.com/Jade-Ray/qwen-vl-service/main/scripts/deploy.sh) \
+  --tag v0.4.0
 
-# 2. 创建 Python 环境
-/opt/miniconda3/bin/conda create -n qwen-vl-service python=3.11 -y -c conda-forge
-/opt/miniconda3/bin/conda install -n qwen-vl-service pip -y -c conda-forge
-
-# 3. 上传项目并安装依赖
-scp -r . root@your-server:/opt/qwen-vl-service
-cd /opt/qwen-vl-service
-cp .env.example .env && nano .env   # 填写 QWEN_API_KEY 和 QWEN_MODEL
-/opt/miniconda3/envs/qwen-vl-service/bin/pip install -r requirements.txt
-
-# 4. 配置 systemd 服务
-cat > /etc/systemd/system/qwen-vl.service << 'EOF'
-[Unit]
-Description=Qwen VL Detection Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/qwen-vl-service
-EnvironmentFile=/opt/qwen-vl-service/.env
-ExecStart=/opt/miniconda3/envs/qwen-vl-service/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable --now qwen-vl
-
-# 5. 验证
-curl http://localhost:8000/health
+# 或者 SSH 到服务器后手动操作：
+# ssh root@your-server-ip
+# bash <(curl -fsSL ...) --tag v0.4.0
 ```
 
-**常用运维命令：**
+脚本首次运行时，若 `/opt/qwen-vl-service/.env` 不存在，会自动从 `.env.example` 创建模板并提示填写：
 
 ```bash
-systemctl status qwen-vl          # 查看状态
-journalctl -u qwen-vl -f          # 实时日志
-systemctl restart qwen-vl         # 重启服务
-
-# 修改配置后重启
+# 填写真实的 API Key（.env 不会进入 Git 仓库）
 nano /opt/qwen-vl-service/.env
 systemctl restart qwen-vl
+```
+
+`.env` 关键配置项：
+
+```ini
+QWEN_API_KEY=your-dashscope-api-key-here   # 必填
+QWEN_MODEL=qwen-vl-max                     # 可选，默认 qwen-vl-max
+```
+
+完整环境变量说明见 [环境变量配置](#环境变量配置) 章节和 `.env.example`。
+
+### 版本更新
+
+开发端推送新版本后，在服务器上一行命令完成更新：
+
+```bash
+# 更新到指定 tag
+bash /opt/qwen-vl-service/scripts/deploy.sh --tag v0.5.0
+
+# 或从本地远程触发（无需登录服务器）
+ssh root@your-server-ip "bash /opt/qwen-vl-service/scripts/deploy.sh --tag v0.5.0"
+```
+
+### 版本回滚
+
+```bash
+bash /opt/qwen-vl-service/scripts/deploy.sh --tag v0.4.0
+```
+
+### 发布新版本（开发端）
+
+```bash
+git tag v0.5.0
+git push origin v0.5.0
+```
+
+### 常用运维命令
+
+```bash
+systemctl status qwen-vl           # 查看服务状态
+journalctl -u qwen-vl -f           # 实时日志
+systemctl restart qwen-vl          # 重启服务
+curl http://localhost:8000/health  # 健康检查
 ```
 
 ### 可选：Nginx 反向代理
@@ -214,13 +223,4 @@ sudo nginx -t && sudo systemctl reload nginx
 # HTTPS（需要域名）
 sudo apt install certbot python3-certbot-nginx -y
 sudo certbot --nginx -d your-domain.com
-```
-
-### 更新部署
-
-```bash
-cd /opt/qwen-vl-service
-git pull
-/opt/miniconda3/envs/qwen-vl-service/bin/pip install -r requirements.txt -q
-systemctl restart qwen-vl
 ```
