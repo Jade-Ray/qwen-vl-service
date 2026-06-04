@@ -114,6 +114,8 @@
 
 该接口为客户定制，返回固定的 `warning_results` 结构，适用于无人机场景告警输出。
 
+> 当前实测推荐：优先使用 `PROMPT_V2`，在误检控制与结果稳定性上表现更好。
+
 ### 请求
 
 **Content-Type：** `application/json`
@@ -128,7 +130,28 @@
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `image_base64` | `string` | ✅ | 图像 Base64（同 `/v1/detect`） |
-| `prompt` | `string` | ❌ | 可选；省略时使用无人机场景默认提示词 |
+| `prompt` | `string` | ❌ | 可选；建议显式传入 `PROMPT_V2`，避免默认提示词漂移 |
+
+### 推荐 Prompt（PROMPT_V2）
+
+```text
+只检测告警类型 NoHelmet 和 Vehicle。
+规则：
+1) NoHelmet：仅输出头部清晰可见且未佩戴标准安全帽的人员；无法确认则忽略。
+2) Vehicle：仅输出可清晰识别的机动车；非机动车、行人、阴影和模糊小目标忽略。
+3) bbox_2d 使用原图像素坐标 [x1,y1,x2,y2]，范围在 1280x720 内，单目标单框。
+4) 仅输出纯 JSON：{"warning_results":[{"warning_type":...,"description":...,"bbox_2d":[...]}]}。
+5) 无命中返回 {"warning_results":[]}，禁止输出额外字段。
+```
+
+### 请求示例（建议）
+
+```json
+{
+  "image_base64": "<图像的 Base64 字符串>",
+  "prompt": "只检测告警类型 NoHelmet 和 Vehicle。\n规则：\n1) NoHelmet：仅输出头部清晰可见且未佩戴标准安全帽的人员；无法确认则忽略。\n2) Vehicle：仅输出可清晰识别的机动车；非机动车、行人、阴影和模糊小目标忽略。\n3) bbox_2d 使用原图像素坐标 [x1,y1,x2,y2]，范围在 1280x720 内，单目标单框。\n4) 仅输出纯 JSON：{\"warning_results\":[{\"warning_type\":...,\"description\":...,\"bbox_2d\":[...]}]}。\n5) 无命中返回 {\"warning_results\":[]}，禁止输出额外字段。"
+}
+```
 
 ### 响应：有告警
 
@@ -199,6 +222,25 @@ curl -X POST http://118.31.37.161:8000/v1/detect \
 cat result.json | jq -r '.image_base64' | base64 -d > rendered.jpg
 ```
 
+**调用 `/v1/drone_detect`（使用推荐 PROMPT_V2）：**
+
+```bash
+IMAGE_B64=$(base64 -w 0 your_image.jpg)
+
+PROMPT_V2='只检测告警类型 NoHelmet 和 Vehicle。
+规则：
+1) NoHelmet：仅输出头部清晰可见且未佩戴标准安全帽的人员；无法确认则忽略。
+2) Vehicle：仅输出可清晰识别的机动车；非机动车、行人、阴影和模糊小目标忽略。
+3) bbox_2d 使用原图像素坐标 [x1,y1,x2,y2]，范围在 1280x720 内，单目标单框。
+4) 仅输出纯 JSON：{"warning_results":[{"warning_type":...,"description":...,"bbox_2d":[...]}]}。
+5) 无命中返回 {"warning_results":[]}，禁止输出额外字段。'
+
+curl -X POST http://118.31.37.161:8000/v1/drone_detect \
+  -H "Content-Type: application/json" \
+  -d "{\"image_base64\":\"$IMAGE_B64\",\"prompt\":$(printf '%s' \"$PROMPT_V2\" | python -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" \
+  -o drone_result.json
+```
+
 ---
 
 ### Python
@@ -252,6 +294,53 @@ if __name__ == "__main__":
     else:
         print("未检测到目标。")
 ```
+
+  **调用 `/v1/drone_detect`（使用推荐 PROMPT_V2）：**
+
+  ```python
+  import base64
+  import httpx
+
+  SERVICE_URL = "http://118.31.37.161:8000"
+
+  PROMPT_V2 = """只检测告警类型 NoHelmet 和 Vehicle。
+  规则：
+  1) NoHelmet：仅输出头部清晰可见且未佩戴标准安全帽的人员；无法确认则忽略。
+  2) Vehicle：仅输出可清晰识别的机动车；非机动车、行人、阴影和模糊小目标忽略。
+  3) bbox_2d 使用原图像素坐标 [x1,y1,x2,y2]，范围在 1280x720 内，单目标单框。
+  4) 仅输出纯 JSON：{"warning_results":[{"warning_type":...,"description":...,"bbox_2d":[...]}]}。
+  5) 无命中返回 {"warning_results":[]}，禁止输出额外字段。"""
+
+
+  def detect_drone_warnings(image_path: str, prompt: str = PROMPT_V2) -> dict:
+    with open(image_path, "rb") as f:
+      image_b64 = base64.b64encode(f.read()).decode()
+
+    payload = {
+      "image_base64": image_b64,
+      "prompt": prompt,
+    }
+
+    resp = httpx.post(
+      f"{SERVICE_URL}/v1/drone_detect",
+      json=payload,
+      timeout=120,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+  if __name__ == "__main__":
+    result = detect_drone_warnings("vehicle.jpg")
+    warning_results = result.get("warning_results", [])
+    print(f"告警数量: {len(warning_results)}")
+    for idx, item in enumerate(warning_results, start=1):
+      print(
+        f"[{idx}] {item.get('warning_type')} "
+        f"bbox={item.get('bbox_2d')} "
+        f"desc={item.get('description')}"
+      )
+  ```
 
 **错误处理示例：**
 
