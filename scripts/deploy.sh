@@ -31,6 +31,17 @@
 #   请手动编辑 /opt/qwen-vl-service/.env 填入真实 QWEN_API_KEY。
 #   后续更新不会覆盖已有的 .env 文件。
 # =============================================================================
+
+# Guard: if invoked by sh/dash, re-exec with bash to support bash-only syntax.
+if [ -z "${BASH_VERSION:-}" ]; then
+  if command -v bash >/dev/null 2>&1; then
+    exec bash "$0" "$@"
+  fi
+  echo "ERROR: 当前 shell 不支持本脚本，请使用 bash 执行："
+  echo "  bash $0 $*"
+  exit 1
+fi
+
 set -euo pipefail
 
 # ---------- 配置 ----------
