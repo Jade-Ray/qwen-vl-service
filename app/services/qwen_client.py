@@ -152,7 +152,21 @@ def _extract_json_object(content: str) -> dict[str, Any]:
 def _normalize_objects(payload: dict[str, Any], image_width: int, image_height: int) -> list[dict[str, Any]]:
     raw_objects = payload.get("objects")
     if raw_objects is None:
-        raw_objects = payload.get("detections", payload.get("results", []))
+        raw_objects = payload.get("detections", payload.get("results"))
+
+    # Support customer-specific warning_results format by mapping it into
+    # the internal object contract used by the rest of the service.
+    if raw_objects is None and isinstance(payload.get("warning_results"), list):
+        raw_objects = []
+        for item in payload["warning_results"]:
+            if not isinstance(item, dict):
+                continue
+            raw_objects.append(
+                {
+                    "label": item.get("warning_type"),
+                    "bbox_2d": item.get("bbox_2d"),
+                }
+            )
 
     if not isinstance(raw_objects, list):
         raise QwenClientError("Qwen-VL JSON response must contain an objects array.")
@@ -162,7 +176,7 @@ def _normalize_objects(payload: dict[str, Any], image_width: int, image_height: 
         if not isinstance(item, dict):
             continue
 
-        label = _first_string(item, "label", "category", "class", "name")
+        label = _first_string(item, "label", "category", "class", "name", "warning_type")
         if not label:
             continue
 

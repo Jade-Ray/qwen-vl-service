@@ -45,3 +45,20 @@ class DetectResponse(BaseModel):
     image_width: int | None = None
     image_height: int | None = None
     mime_type: str | None = None
+
+
+class DroneWarningItem(BaseModel):
+    warning_type: Literal["NoHelmet", "Vehicle"]
+    description: str = Field(..., min_length=1)
+    bbox_2d: list[int] = Field(..., min_length=4, max_length=4)
+
+    @field_validator("bbox_2d")
+    @classmethod
+    def validate_bbox(cls, bbox_2d: list[int]) -> list[int]:
+        if len(bbox_2d) != 4:
+            raise ValueError("bbox_2d must contain exactly 4 integer coordinates.")
+        return bbox_2d
+
+
+class DroneDetectResponse(BaseModel):
+    warning_results: list[DroneWarningItem] = Field(default_factory=list)

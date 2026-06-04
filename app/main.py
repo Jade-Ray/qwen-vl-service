@@ -10,6 +10,9 @@ from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 
 from app.schemas import (
     DetectResponse,
+    DetectionObject,
+    DroneDetectResponse,
+    DroneWarningItem,
     EchoImageRequest,
     EchoImageResponse,
     ImageDetectRequest,
@@ -140,6 +143,70 @@ def health() -> dict[str, str]:
 
 v1 = APIRouter(prefix="/v1", dependencies=[Depends(verify_api_key)])
 
+_DRONE_DEFAULT_PROMPT = (
+    "你是无人机图像告警检测模型。"
+    "请仅检测 NoHelmet(未佩戴安全帽) 和 Vehicle(车辆) 两类目标，"
+    "返回每个目标的边界框与类别。"
+)
+
+
+def _warning_type_from_label(label: str) -> str | None:
+    text = label.strip().lower()
+    if text in {"nohelmet", "no_helmet", "helmet_missing", "未佩戴安全帽", "未戴安全帽"}:
+        return "NoHelmet"
+    if text in {"vehicle", "car", "suv", "truck", "bus", "车辆", "机动车"}:
+        return "Vehicle"
+    if "helmet" in text and "no" in text:
+        return "NoHelmet"
+    if "车辆" in text or "vehicle" in text or "car" in text:
+        return "Vehicle"
+    return None
+
+
+def _position_description(bbox_2d: list[int], image_width: int, image_height: int) -> str:
+    x1, y1, x2, y2 = bbox_2d
+    cx = (x1 + x2) / 2
+    cy = (y1 + y2) / 2
+
+    if cx < image_width / 3:
+        hor = "左侧"
+    elif cx > image_width * 2 / 3:
+        hor = "右侧"
+    else:
+        hor = "中部"
+
+    if cy < image_height / 3:
+        ver = "上方"
+    elif cy > image_height * 2 / 3:
+        ver = "下方"
+    else:
+        ver = "中间"
+
+    return f"画面{ver}{hor}"
+
+
+def _to_drone_warning_items(objects: list[DetectionObject], image_width: int, image_height: int) -> list[DroneWarningItem]:
+    warnings: list[DroneWarningItem] = []
+    for obj in objects:
+        warning_type = _warning_type_from_label(obj.label)
+        if warning_type is None:
+            continue
+
+        pos = _position_description(obj.bbox_2d, image_width=image_width, image_height=image_height)
+        if warning_type == "NoHelmet":
+            description = f"检测到疑似未佩戴安全帽人员，位于{pos}"
+        else:
+            description = f"检测到机动车目标，位于{pos}"
+
+        warnings.append(
+            DroneWarningItem(
+                warning_type=warning_type,
+                description=description,
+                bbox_2d=obj.bbox_2d,
+            )
+        )
+    return warnings
+
 
 @v1.post(
     "/debug/echo-image",
@@ -233,6 +300,63 @@ def detect(
         image_height=image.height,
         mime_type=f"image/{output_format.lower()}",
     )
+
+
+@v1.post(
+    "/drone_detect",
+    response_model=DroneDetectResponse,
+    summary="Drone warning detection",
+    description=(
+        "Customer-specific drone alarm endpoint. "
+        "Always returns warning_results items with warning_type, description, bbox_2d."
+    ),
+    responses={
+        200: {"description": "Drone warning results"},
+        401: {"description": "Invalid or missing X-API-Key"},
+        422: {"description": "Missing or malformed image"},
+        502: {"description": "Upstream Qwen-VL error"},
+        503: {"description": "Service busy or Qwen API key not configured"},
+    },
+)
+def drone_detect(
+    request: ImageDetectRequest,
+    qwen_client: QwenVLClient = Depends(get_qwen_client),
+    settings: Settings = Depends(get_settings),
+) -> DroneDetectResponse:
+    try:
+        image, source_format, normalized_image_base64 = decode_base64_image(
+            request.image_base64,
+            max_b64_chars=settings.max_image_b64_chars,
+            max_image_pixels=settings.max_image_pixels,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if not _detect_lock.acquire(blocking=False):
+        raise HTTPException(status_code=503, detail="当前服务忙，请稍后再试。")
+
+    try:
+        try:
+            detection_result = qwen_client.detect_objects(
+                image_base64=normalized_image_base64,
+                image_mime=f"image/{source_format.lower()}",
+                prompt=request.prompt or _DRONE_DEFAULT_PROMPT,
+                image_width=image.width,
+                image_height=image.height,
+            )
+        except QwenClientError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        _detect_lock.release()
+
+    warning_items = _to_drone_warning_items(
+        detection_result.objects,
+        image_width=image.width,
+        image_height=image.height,
+    )
+    return DroneDetectResponse(warning_results=warning_items)
 
 
 app.include_router(v1)

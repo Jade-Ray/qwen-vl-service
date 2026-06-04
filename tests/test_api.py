@@ -207,6 +207,79 @@ class TestDetectEndpoint:
         assert "服务忙" in response.json()["detail"]
 
 
+class TestDroneDetectEndpoint:
+    def test_drone_detect_missing_image_returns_422(self, api_client: TestClient) -> None:
+        response = api_client.post("/v1/drone_detect", json={})
+        assert response.status_code == 422
+
+    def test_drone_detect_invalid_image_returns_422(self, api_client: TestClient) -> None:
+        response = api_client.post("/v1/drone_detect", json={"image_base64": "bad!!!"})
+        assert response.status_code == 422
+
+    def test_drone_detect_no_objects_returns_empty_warning_results(self, api_client: TestClient) -> None:
+        b64 = make_png_base64()
+        app.dependency_overrides[get_qwen_client] = lambda: _mock_client([])
+        response = api_client.post("/v1/drone_detect", json={"image_base64": b64})
+        assert response.status_code == 200
+        data = response.json()
+        assert set(data.keys()) == {"warning_results"}
+        assert data["warning_results"] == []
+
+    def test_drone_detect_with_objects_returns_warning_results(self, api_client: TestClient) -> None:
+        b64 = make_png_base64(200, 150)
+        objs = [
+            DetectionObject(label="未佩戴安全帽", bbox_2d=[10, 10, 60, 90]),
+            DetectionObject(label="car", bbox_2d=[80, 20, 150, 100]),
+        ]
+        app.dependency_overrides[get_qwen_client] = lambda: _mock_client(objs)
+        response = api_client.post("/v1/drone_detect", json={"image_base64": b64})
+        assert response.status_code == 200
+        data = response.json()
+        assert set(data.keys()) == {"warning_results"}
+        assert len(data["warning_results"]) == 2
+        assert data["warning_results"][0]["warning_type"] == "NoHelmet"
+        assert data["warning_results"][1]["warning_type"] == "Vehicle"
+        for item in data["warning_results"]:
+            assert item["description"]
+            assert len(item["bbox_2d"]) == 4
+
+    def test_drone_detect_without_prompt_uses_default_prompt(self, api_client: TestClient) -> None:
+        b64 = make_png_base64()
+        mock = _mock_client([])
+        app.dependency_overrides[get_qwen_client] = lambda: mock
+        api_client.post("/v1/drone_detect", json={"image_base64": b64})
+        prompt = mock.detect_objects.call_args.kwargs.get("prompt")
+        assert isinstance(prompt, str)
+        assert "NoHelmet" in prompt and "Vehicle" in prompt
+
+    def test_drone_detect_with_prompt_passes_through(self, api_client: TestClient) -> None:
+        b64 = make_png_base64()
+        mock = _mock_client([])
+        app.dependency_overrides[get_qwen_client] = lambda: mock
+        api_client.post("/v1/drone_detect", json={"image_base64": b64, "prompt": "find vehicle"})
+        assert mock.detect_objects.call_args.kwargs.get("prompt") == "find vehicle"
+
+    def test_drone_detect_qwen_error_returns_502(self, api_client: TestClient) -> None:
+        from app.services.qwen_client import QwenClientError
+        b64 = make_png_base64()
+        mock = MagicMock()
+        mock.detect_objects.side_effect = QwenClientError("upstream down")
+        app.dependency_overrides[get_qwen_client] = lambda: mock
+        response = api_client.post("/v1/drone_detect", json={"image_base64": b64})
+        assert response.status_code == 502
+        assert "upstream down" in response.json()["detail"]
+
+    def test_drone_detect_busy_returns_503(self, api_client: TestClient) -> None:
+        b64 = make_png_base64()
+        _detect_lock.acquire(blocking=False)
+        try:
+            response = api_client.post("/v1/drone_detect", json={"image_base64": b64})
+        finally:
+            _detect_lock.release()
+        assert response.status_code == 503
+        assert "服务忙" in response.json()["detail"]
+
+
 # ---------------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------------
@@ -252,6 +325,26 @@ class TestAuthentication:
         app.dependency_overrides[get_qwen_client] = lambda: _mock_client([])
         response = api_client.post(
             "/v1/detect",
+            json={"image_base64": make_png_base64()},
+            headers={"X-API-Key": "secret-key"},
+        )
+        assert response.status_code == 200
+
+    def test_drone_auth_enabled_wrong_key_returns_401(self, api_client: TestClient) -> None:
+        app.dependency_overrides[get_settings] = self._settings_with_auth
+        app.dependency_overrides[get_qwen_client] = lambda: _mock_client([])
+        response = api_client.post(
+            "/v1/drone_detect",
+            json={"image_base64": make_png_base64()},
+            headers={"X-API-Key": "wrong"},
+        )
+        assert response.status_code == 401
+
+    def test_drone_auth_enabled_correct_key_passes(self, api_client: TestClient) -> None:
+        app.dependency_overrides[get_settings] = self._settings_with_auth
+        app.dependency_overrides[get_qwen_client] = lambda: _mock_client([])
+        response = api_client.post(
+            "/v1/drone_detect",
             json={"image_base64": make_png_base64()},
             headers={"X-API-Key": "secret-key"},
         )

@@ -22,6 +22,7 @@
 |------|------|------|
 | `GET` | `/health` | 健康检查 |
 | `POST` | `/v1/detect` | **目标检测主接口** |
+| `POST` | `/v1/drone_detect` | **无人机告警定制接口（warning_results）** |
 | `POST` | `/v1/debug/echo-image` | 调试：图像编解码验证 |
 
 ---
@@ -106,6 +107,61 @@
 | `401` | 鉴权失败（启用鉴权时） | `"Invalid or missing API key"` |
 | `502` | Qwen-VL 模型 API 调用失败 | `"Qwen API error 429: Rate limit exceeded"` |
 | `503` | 服务正忙（上一个请求尚未完成） | `"Service busy, please retry later"` |
+
+---
+
+## `POST /v1/drone_detect` — 无人机告警定制接口
+
+该接口为客户定制，返回固定的 `warning_results` 结构，适用于无人机场景告警输出。
+
+### 请求
+
+**Content-Type：** `application/json`
+
+```json
+{
+  "image_base64": "<图像的 Base64 字符串>",
+  "prompt": "可选自定义指令"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `image_base64` | `string` | ✅ | 图像 Base64（同 `/v1/detect`） |
+| `prompt` | `string` | ❌ | 可选；省略时使用无人机场景默认提示词 |
+
+### 响应：有告警
+
+```json
+{
+  "warning_results": [
+    {
+      "warning_type": "NoHelmet",
+      "description": "检测到疑似未佩戴安全帽人员，位于画面下方中部",
+      "bbox_2d": [231, 407, 344, 861]
+    },
+    {
+      "warning_type": "Vehicle",
+      "description": "检测到机动车目标，位于画面中间右侧",
+      "bbox_2d": [668, 394, 809, 880]
+    }
+  ]
+}
+```
+
+### 响应：无告警
+
+```json
+{
+  "warning_results": []
+}
+```
+
+> 注意：该接口不会返回 `type`、`objects`、`image_base64` 等字段。
+
+### 错误响应
+
+状态码与 `/v1/detect` 一致：`401`、`422`、`502`、`503`。
 
 ---
 
