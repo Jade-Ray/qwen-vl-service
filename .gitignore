@@ -35,6 +35,7 @@ qwen_vl_server_test.ipynb
 htmlcov/
 .coverage
 coverage.xml
+test_outputs/
 
 # Images (runtime test data, not deliverable)
 images/
